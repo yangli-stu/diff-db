@@ -126,19 +126,42 @@ src/test/resources/
 
 ---
 
-## 5. 常见问题
+## 5. 查看 Compare / 生成 SQL 日志
+
+DiffDB 会把 Compare 过程写入 IntelliJ 日志（logger: `com.diffdb.ui.DiffDbPanel`）。
+
+### 沙箱 IDE 内
+
+**Help → Show Log in Finder**（Mac）或 **Show Log in Explorer**（Windows），打开 `idea.log`。
+
+### 项目目录（终端）
+
+```bash
+# 实时跟踪沙箱日志
+tail -f build/idea-sandbox/IC-2024.1/log/idea.log
+
+# 只看 DiffDB 相关
+grep -i diffdb build/idea-sandbox/IC-2024.1/log/idea.log | tail -50
+```
+
+Compare 失败时日志里通常有 `Compare failed` 或 Liquibase 堆栈；修复后 UI 也会弹出错误对话框。
+
+---
+
+## 6. 常见问题
 
 | 现象 | 处理 |
 |------|------|
 | Gradle 下载 TLS 握手失败 | 重试；或检查代理/防火墙 |
 | Test Connection 报 Driver not found / PluginClassLoader | 重新 `./gradlew clean runIde` 加载内置驱动；或手动指定 Driver jar |
+| Compare 点击无反应 / 无结果 | 看 **§5 日志**；常见为 Liquibase 未初始化（已修复）或 `catch` 漏掉 Error；重新 `./gradlew runIde` |
 | Compare 很慢 | 远程库检查网络/SSH；大 schema 属正常 |
 | Tools → DiffDB 点了没反应 | ① 确认已 **Open Project**（Welcome 页无效）；② 重新 `./gradlew clean runIde` 加载最新插件；③ 若弹出错误框说明 Tool Window 未注册，检查 Settings → Plugins → DiffDB 已启用 |
 | 插件 Gradle 版本过旧提示 | 可在 `gradle.properties` 将 `intellijPluginVersion` 升至 2.16.0 |
 
 ---
 
-## 6. 本地 MySQL / PostgreSQL 快速造数（可选）
+## 7. 本地 MySQL / PostgreSQL 快速造数（可选）
 
 若需真实库联调，可本地起两个 schema/database，分别导入不同 DDL，再在 DiffDB 里配置两个连接对比。
 

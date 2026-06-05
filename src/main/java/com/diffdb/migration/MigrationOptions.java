@@ -6,7 +6,7 @@ package com.diffdb.migration;
 public class MigrationOptions {
 
     /** Include DROP statements for objects only present in the target. */
-    private boolean includeDrops = false;
+    private boolean includeDrops = true;
 
     /** Qualify object names with their schema. */
     private boolean includeSchema = false;

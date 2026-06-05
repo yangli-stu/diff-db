@@ -66,4 +66,12 @@ public final class ConnectionStorageService
                 .findFirst()
                 .orElse(null);
     }
+
+    @Nullable
+    public ConnectionConfig findByName(String name) {
+        return state.connections.stream()
+                .filter(c -> c.getName().equals(name))
+                .findFirst()
+                .orElse(null);
+    }
 }

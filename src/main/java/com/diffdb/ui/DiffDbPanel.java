@@ -10,26 +10,23 @@ import com.diffdb.model.ConnectionConfig;
 import com.diffdb.service.ConnectionStorageService;
 import com.diffdb.service.CredentialService;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.ui.JBSplitter;
-import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
 
 import javax.swing.JButton;
-import javax.swing.JComponent;
 import javax.swing.JPanel;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * Main DiffDB tool window panel: pick source/target connections, run the diff,
- * and generate migration SQL.
- */
 public class DiffDbPanel extends JPanel {
+
+    private static final Logger LOG = Logger.getInstance(DiffDbPanel.class);
 
     private final Project project;
 
@@ -37,9 +34,8 @@ public class DiffDbPanel extends JPanel {
             new com.intellij.openapi.ui.ComboBox<>();
     private final com.intellij.openapi.ui.ComboBox<ConnectionConfig> targetCombo =
             new com.intellij.openapi.ui.ComboBox<>();
-    private final JBCheckBox includeDropsCheck = new JBCheckBox("Include DROP statements", false);
 
-    private final DiffTreePanel treePanel = new DiffTreePanel();
+    private final DiffResultTablePanel diffTablePanel = new DiffResultTablePanel();
     private final MigrationPreviewPanel previewPanel;
 
     private final SchemaDiffService diffService = new LiquibaseSchemaDiffService();
@@ -47,51 +43,43 @@ public class DiffDbPanel extends JPanel {
 
     private final AtomicReference<SchemaDiffResult> lastResult = new AtomicReference<>();
 
+    private DbManagerPanel dbManagerPanel;
+
     public DiffDbPanel(Project project) {
         super(new BorderLayout());
         this.project = project;
         this.previewPanel = new MigrationPreviewPanel(project);
 
-        add(buildToolbar(), BorderLayout.NORTH);
+        dbManagerPanel = new DbManagerPanel(project, this::reloadConnections);
 
-        JBSplitter splitter = new JBSplitter(true, 0.55f);
-        splitter.setFirstComponent(treePanel);
-        splitter.setSecondComponent(previewPanel);
-        add(splitter, BorderLayout.CENTER);
+        JBSplitter innerSplitter = new JBSplitter(true, 0.60f);
+        innerSplitter.setFirstComponent(diffTablePanel);
+        innerSplitter.setSecondComponent(previewPanel);
+
+        JPanel centerPanel = new JPanel(new BorderLayout());
+        centerPanel.add(buildDiffToolbar(), BorderLayout.NORTH);
+        centerPanel.add(innerSplitter, BorderLayout.CENTER);
+
+        JBSplitter outerSplitter = new JBSplitter(true, 0.30f);
+        outerSplitter.setFirstComponent(dbManagerPanel);
+        outerSplitter.setSecondComponent(centerPanel);
+        add(outerSplitter, BorderLayout.CENTER);
 
         reloadConnections();
     }
 
-    private JComponent buildToolbar() {
-        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        row1.add(new JBLabel("Source:"));
-        row1.add(sourceCombo);
-        row1.add(new JBLabel("Target:"));
-        row1.add(targetCombo);
+    private JPanel buildDiffToolbar() {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        row.add(new JBLabel("Source:"));
+        row.add(sourceCombo);
+        row.add(new JBLabel("Target:"));
+        row.add(targetCombo);
 
-        JButton newButton = new JButton("New");
-        JButton editButton = new JButton("Edit");
-        JButton deleteButton = new JButton("Delete");
-        newButton.addActionListener(e -> onNew());
-        editButton.addActionListener(e -> onEdit());
-        deleteButton.addActionListener(e -> onDelete());
-        row1.add(newButton);
-        row1.add(editButton);
-        row1.add(deleteButton);
+        JButton compareBtn = new JButton("Compare");
+        compareBtn.addActionListener(e -> onCompare());
+        row.add(compareBtn);
 
-        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton diffButton = new JButton("Compare");
-        JButton sqlButton = new JButton("Generate Migration SQL");
-        diffButton.addActionListener(e -> onCompare());
-        sqlButton.addActionListener(e -> onGenerateSql());
-        row2.add(diffButton);
-        row2.add(sqlButton);
-        row2.add(includeDropsCheck);
-
-        JPanel toolbar = new JPanel(new BorderLayout());
-        toolbar.add(row1, BorderLayout.NORTH);
-        toolbar.add(row2, BorderLayout.SOUTH);
-        return toolbar;
+        return row;
     }
 
     private void reloadConnections() {
@@ -105,44 +93,6 @@ public class DiffDbPanel extends JPanel {
         }
         if (prevSource != null) sourceCombo.setSelectedItem(prevSource);
         if (prevTarget != null) targetCombo.setSelectedItem(prevTarget);
-    }
-
-    private void onNew() {
-        ConnectionConfig config = new ConnectionConfig();
-        ConnectionDialog dialog = new ConnectionDialog(project, config);
-        if (dialog.showAndGet()) {
-            ConnectionStorageService.getInstance().save(config);
-            reloadConnections();
-            sourceCombo.setSelectedItem(config);
-        }
-    }
-
-    private void onEdit() {
-        ConnectionConfig selected = (ConnectionConfig) sourceCombo.getSelectedItem();
-        if (selected == null) {
-            Messages.showInfoMessage(project, "Select a connection first.", "DiffDB");
-            return;
-        }
-        ConnectionConfig copy = selected.copy();
-        ConnectionDialog dialog = new ConnectionDialog(project, copy);
-        if (dialog.showAndGet()) {
-            ConnectionStorageService.getInstance().save(copy);
-            reloadConnections();
-        }
-    }
-
-    private void onDelete() {
-        ConnectionConfig selected = (ConnectionConfig) sourceCombo.getSelectedItem();
-        if (selected == null) {
-            return;
-        }
-        int answer = Messages.showYesNoDialog(project,
-                "Delete connection \"" + selected.getName() + "\"?", "DiffDB", null);
-        if (answer == Messages.YES) {
-            ConnectionStorageService.getInstance().delete(selected.getId());
-            CredentialService.clear(selected.getId());
-            reloadConnections();
-        }
     }
 
     private void onCompare() {
@@ -159,15 +109,18 @@ public class DiffDbPanel extends JPanel {
 
         new Task.Backgroundable(project, "Comparing schemas", true) {
             private SchemaDiffResult result;
-            private Exception error;
+            private Throwable error;
 
             @Override
             public void run(ProgressIndicator indicator) {
                 indicator.setIndeterminate(true);
                 try {
+                    LOG.info("Compare started: source=" + source.getName() + ", target=" + target.getName());
                     result = diffService.diff(source, target, secretResolver());
-                } catch (Exception e) {
-                    error = e;
+                    LOG.info("Compare finished: empty=" + (result != null && result.isEmpty()));
+                } catch (Throwable t) {
+                    error = t;
+                    LOG.error("Compare failed", t);
                 }
             }
 
@@ -176,12 +129,15 @@ public class DiffDbPanel extends JPanel {
                 ApplicationManager.getApplication().invokeLater(() -> {
                     if (error != null) {
                         Messages.showErrorDialog(project,
-                                "Compare failed:\n" + safeMessage(error), "DiffDB");
+                                "Compare failed:\n" + formatError(error), "DiffDB");
                         return;
                     }
                     lastResult.set(result);
-                    treePanel.showResult(result);
+                    diffTablePanel.showResult(result);
                     previewPanel.clear();
+
+                    // Auto-generate SQL
+                    onGenerateSql();
                 });
             }
         }.queue();
@@ -190,23 +146,22 @@ public class DiffDbPanel extends JPanel {
     private void onGenerateSql() {
         SchemaDiffResult result = lastResult.get();
         if (result == null) {
-            Messages.showInfoMessage(project, "Run Compare first.", "DiffDB");
             return;
         }
         MigrationOptions options = new MigrationOptions();
-        options.setIncludeDrops(includeDropsCheck.isSelected());
 
         new Task.Backgroundable(project, "Generating migration SQL", true) {
             private String sql;
-            private Exception error;
+            private Throwable error;
 
             @Override
             public void run(ProgressIndicator indicator) {
                 indicator.setIndeterminate(true);
                 try {
                     sql = sqlGenerator.generate(result, options);
-                } catch (Exception e) {
-                    error = e;
+                } catch (Throwable t) {
+                    error = t;
+                    LOG.error("Migration SQL generation failed", t);
                 }
             }
 
@@ -215,7 +170,7 @@ public class DiffDbPanel extends JPanel {
                 ApplicationManager.getApplication().invokeLater(() -> {
                     if (error != null) {
                         Messages.showErrorDialog(project,
-                                "Generation failed:\n" + safeMessage(error), "DiffDB");
+                                "Generation failed:\n" + formatError(error), "DiffDB");
                         return;
                     }
                     previewPanel.setSql(sql);
@@ -238,7 +193,15 @@ public class DiffDbPanel extends JPanel {
         };
     }
 
-    private static String safeMessage(Exception e) {
-        return e.getMessage() == null ? e.toString() : e.getMessage();
+    private static String formatError(Throwable t) {
+        Throwable root = t;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        String msg = root.getMessage();
+        if (msg == null || msg.isBlank()) {
+            msg = root.toString();
+        }
+        return msg;
     }
 }

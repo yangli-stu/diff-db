@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DiffDB — DB Management UI Demo</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #2b2b2b;
+  color: #bbb;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 12px;
+  padding: 16px;
+}
+
+h1 { font-size: 14px; color: #999; font-weight: 500; margin-bottom: 12px; letter-spacing: 0.5px; text-transform: uppercase; }
+
+.panel {
+  background: #3c3c3c;
+  border: 1px solid #555;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: #383838;
+  border-bottom: 1px solid #555;
+  gap: 10px;
+}
+
+.toolbar-title { font-size: 13px; font-weight: 700; color: #ddd; flex: 1; }
+
+.btn {
+  background: #4a4a4a;
+  border: 1px solid #666;
+  color: #ccc;
+  padding: 3px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.btn:hover { background: #555; color: #fff; }
+
+.card {
+  border-bottom: 1px solid #4a4a4a;
+  padding: 0;
+}
+.card:last-child { border-bottom: none; }
+
+.card-header {
+  display: flex;
+  align-items: center;
+  padding: 7px 12px;
+  gap: 8px;
+}
+
+.card-header .arrow { color: #888; font-size: 11px; width: 14px; flex-shrink: 0; }
+.card-header .conn-name { color: #ddd; font-weight: 600; font-size: 12px; }
+.card-header .badge {
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.badge-connected { background: #2a4a2a; color: #4a8c4c; }
+.badge-info { background: #2a2a3a; color: #888; font-size: 10px; padding: 1px 6px; border-radius: 3px; }
+.card-header .actions { margin-left: auto; display: flex; gap: 4px; }
+.action-icon {
+  background: none; border: 1px solid transparent; color: #888; padding: 2px 5px;
+  border-radius: 3px; cursor: pointer; font-size: 11px; transition: all 0.15s;
+}
+.action-icon:hover { background: #4a4a4a; border-color: #666; color: #ccc; }
+
+.expanded-body { padding: 2px 12px 8px 28px; }
+
+.table-row {
+  display: flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 3px;
+  gap: 6px;
+  color: #aaa;
+}
+.table-row:hover { background: #444; }
+.table-row .table-icon { color: #888; font-size: 11px; }
+.table-row .table-count { color: #666; font-size: 10px; }
+
+.card-footer { padding: 4px 12px 6px 28px; color: #666; font-size: 10px; }
+
+.diff-section {
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.diff-section label { color: #999; font-size: 11px; }
+.select-wrap select {
+  background: #4a4a4a;
+  border: 1px solid #666;
+  color: #ccc;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: inherit;
+}
+.btn-primary {
+  background: #2a4a6a;
+  border: 1px solid #4a8aba;
+  color: #4fc3f7;
+  padding: 3px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.btn-primary:hover { background: #3a5a7a; }
+.checkbox-label { color: #999; font-size: 11px; display: flex; align-items: center; gap: 4px; }
+.checkbox-label input { accent-color: #4fc3f7; }
+
+.split-section { display: flex; min-height: 200px; }
+.split-left {
+  flex: 1;
+  border-right: 1px solid #555;
+  padding: 8px 10px;
+  overflow: auto;
+}
+.split-right {
+  flex: 1;
+  padding: 8px 10px;
+  overflow: auto;
+}
+
+.split-title { font-size: 11px; font-weight: 600; color: #999; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.3px; }
+
+.diff-item {
+  padding: 2px 6px;
+  border-radius: 2px;
+  font-size: 11px;
+  margin-bottom: 1px;
+  cursor: pointer;
+}
+.diff-item:hover { background: #4a4a4a; }
+.diff-item.added { color: #4a8c5c; }
+.diff-item.added::before { content: "+ "; font-weight: 700; }
+.diff-item.changed { color: #d4a026; }
+.diff-item.changed::before { content: "~ "; font-weight: 700; }
+.diff-item.removed { color: #c66; }
+.diff-item.removed::before { content: "- "; font-weight: 700; }
+
+.diff-item .diff-detail { color: #777; font-size: 10px; margin-left: 4px; }
+
+.sql-preview {
+  background: #2b2b2b;
+  border: 1px solid #444;
+  border-radius: 3px;
+  padding: 8px 10px;
+  font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+  font-size: 11px;
+  color: #a9b7c6;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-x: auto;
+}
+.sql-kw { color: #cc7832; font-weight: 600; }
+.sql-type { color: #6897bb; }
+.sql-str { color: #6a8759; }
+.sql-comment { color: #808080; font-style: italic; }
+
+.section-label { font-size: 14px; color: #999; font-weight: 500; margin-bottom: 12px; margin-top: 8px; letter-spacing: 0.5px; text-transform: uppercase; border-top: 1px solid #444; padding-top: 16px; }
+
+.yaml-block {
+  background: #2b2b2b;
+  border: 1px solid #444;
+  border-radius: 3px;
+  padding: 10px 14px;
+  font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+  font-size: 11px;
+  color: #a9b7c6;
+  line-height: 1.7;
+  white-space: pre;
+  overflow-x: auto;
+}
+.yaml-key { color: #9876aa; }
+.yaml-val { color: #a9b7c6; }
+.yaml-comment { color: #629755; font-style: italic; }
+.yaml-null { color: #808080; }
+</style>
+</head>
+<body>
+
+<h1>DiffDB — DB Management UI Demo</h1>
+
+<!-- DB Management Panel -->
+<div class="panel">
+  <div class="toolbar">
+    <span class="toolbar-title">🗄 Databases</span>
+    <button class="btn">+ Add</button>
+    <button class="btn">⬇ Import</button>
+    <button class="btn">⬆ Export</button>
+  </div>
+
+  <!-- Expanded card: dev-postgres -->
+  <div class="card">
+    <div class="card-header">
+      <span class="arrow">▼</span>
+      <span class="conn-name">dev-postgres</span>
+      <span class="badge badge-connected">connected</span>
+      <span class="badge badge-info">PostgreSQL · 192.168.1.50:5432</span>
+      <span class="actions">
+        <button class="action-icon" title="Test Connection">🔌</button>
+        <button class="action-icon" title="Edit">✏️</button>
+        <button class="action-icon" title="Duplicate">📋</button>
+        <button class="action-icon" title="Delete">🗑️</button>
+      </span>
+    </div>
+    <div class="expanded-body">
+      <div class="table-row">
+        <span class="table-icon">📋</span>
+        <span>users</span>
+        <span class="table-count">— 12 cols</span>
+      </div>
+      <div class="table-row">
+        <span class="table-icon">📋</span>
+        <span>orders</span>
+        <span class="table-count">— 8 cols</span>
+      </div>
+      <div class="table-row">
+        <span class="table-icon">📋</span>
+        <span>products</span>
+        <span class="table-count">— 6 cols</span>
+      </div>
+      <div class="table-row">
+        <span class="table-icon">📋</span>
+        <span>categories</span>
+        <span class="table-count">— 4 cols</span>
+      </div>
+    </div>
+    <div class="card-footer">4 tables total</div>
+  </div>
+
+  <!-- Collapsed card: prod-mysql -->
+  <div class="card">
+    <div class="card-header">
+      <span class="arrow">▶</span>
+      <span class="conn-name">prod-mysql</span>
+      <span class="badge badge-info">MySQL · 10.0.1.100:3306</span>
+      <span class="actions">
+        <button class="action-icon" title="Test Connection">🔌</button>
+        <button class="action-icon" title="Edit">✏️</button>
+        <button class="action-icon" title="Duplicate">📋</button>
+        <button class="action-icon" title="Delete">🗑️</button>
+      </span>
+    </div>
+  </div>
+
+  <!-- Collapsed card: staging-mysql -->
+  <div class="card">
+    <div class="card-header">
+      <span class="arrow">▶</span>
+      <span class="conn-name">staging-mysql</span>
+      <span class="badge badge-info">MySQL · staging.db.io:3306</span>
+      <span class="actions">
+        <button class="action-icon" title="Test Connection">🔌</button>
+        <button class="action-icon" title="Edit">✏️</button>
+        <button class="action-icon" title="Duplicate">📋</button>
+        <button class="action-icon" title="Delete">🗑️</button>
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- Diff Section -->
+<div class="panel">
+  <div class="diff-section">
+    <label>Source:</label>
+    <span class="select-wrap">
+      <select>
+        <option>prod-mysql (MySQL · 10.0.1.100)</option>
+        <option>dev-postgres (PostgreSQL · 192.168.1.50)</option>
+        <option>staging-mysql (MySQL · staging.db.io)</option>
+      </select>
+    </span>
+    <label>Target:</label>
+    <span class="select-wrap">
+      <select>
+        <option>dev-postgres (PostgreSQL · 192.168.1.50)</option>
+        <option>prod-mysql (MySQL · 10.0.1.100)</option>
+        <option>staging-mysql (MySQL · staging.db.io)</option>
+      </select>
+    </span>
+    <button class="btn-primary">Compare</button>
+    <button class="btn-primary">Generate Migration SQL</button>
+    <label class="checkbox-label"><input type="checkbox"> Include DROPs</label>
+  </div>
+</div>
+
+<!-- Split: Diff Tree + SQL Preview -->
+<div class="panel split-section">
+  <div class="split-left">
+    <div class="split-title">Diff Tree</div>
+    <div class="diff-item added">users<span class="diff-detail">table added</span></div>
+    <div class="diff-item changed">orders.order_date<span class="diff-detail">type changed</span></div>
+    <div class="diff-item changed">orders.total<span class="diff-detail">nullable changed</span></div>
+    <div class="diff-item removed">audit_log<span class="diff-detail">table removed</span></div>
+    <div class="diff-item added">products.rating<span class="diff-detail">column added</span></div>
+    <div class="diff-item changed">categories.name<span class="diff-detail">length changed</span></div>
+    <div class="diff-item removed">orders.status<span class="diff-detail">column removed</span></div>
+  </div>
+  <div class="split-right">
+    <div class="split-title">Migration SQL Preview</div>
+    <div class="sql-preview"><span class="sql-comment">-- Migration: prod-mysql → dev-postgres</span>
+<span class="sql-comment">-- Generated by DiffDB</span>
+
+<span class="sql-kw">ALTER TABLE</span> orders
+  <span class="sql-kw">ALTER COLUMN</span> order_date <span class="sql-kw">TYPE</span> <span class="sql-type">TIMESTAMPTZ</span>,
+  <span class="sql-kw">ALTER COLUMN</span> total <span class="sql-kw">SET NOT NULL</span>;
+
+<span class="sql-kw">CREATE TABLE</span> users (
+  id         <span class="sql-type">SERIAL</span>       <span class="sql-kw">PRIMARY KEY</span>,
+  username   <span class="sql-type">VARCHAR(50)</span>  <span class="sql-kw">NOT NULL</span>,
+  email      <span class="sql-type">VARCHAR(100)</span> <span class="sql-kw">UNIQUE</span>
+);
+
+<span class="sql-kw">ALTER TABLE</span> products
+  <span class="sql-kw">ADD COLUMN</span> rating <span class="sql-type">NUMERIC(3,2)</span>;
+
+<span class="sql-kw">DROP TABLE</span> audit_log;</div>
+  </div>
+</div>
+
+<!-- YAML Export Sample -->
+<div class="section-label">YAML Export Format</div>
+<div class="panel">
+  <div class="yaml-block"><span class="yaml-comment"># DiffDB Connection Configurations</span>
+<span class="yaml-comment"># Export date: 2026-06-05</span>
+
+<span class="yaml-key">connections</span>:
+  <span class="yaml-comment">-</span> <span class="yaml-key">name</span>: dev-postgres                   <span class="yaml-comment"># Display name for this connection</span>
+    <span class="yaml-key">type</span>: POSTGRESQL                    <span class="yaml-comment"># Database type: MYSQL or POSTGRESQL</span>
+    <span class="yaml-key">host</span>: 192.168.1.50                  <span class="yaml-comment"># Database server hostname or IP</span>
+    <span class="yaml-key">port</span>: 5432                           <span class="yaml-comment"># Database server port</span>
+    <span class="yaml-key">database</span>: myapp_dev                  <span class="yaml-comment"># Database name to connect to</span>
+    <span class="yaml-key">schema</span>: public                       <span class="yaml-comment"># Schema name (PostgreSQL only)</span>
+    <span class="yaml-key">user</span>: dev_user                       <span class="yaml-comment"># Database login username</span>
+    <span class="yaml-comment"># password: ***                        # Not exported; stored in IntelliJ PasswordSafe</span>
+    <span class="yaml-key">driver_jar</span>: <span class="yaml-null">null</span>                    <span class="yaml-comment"># Optional: custom JDBC driver jar path</span>
+
+  <span class="yaml-comment">-</span> <span class="yaml-key">name</span>: prod-mysql                     <span class="yaml-comment"># Display name for this connection</span>
+    <span class="yaml-key">type</span>: MYSQL                         <span class="yaml-comment"># Database type: MYSQL or POSTGRESQL</span>
+    <span class="yaml-key">host</span>: 10.0.1.100                     <span class="yaml-comment"># Database server hostname or IP</span>
+    <span class="yaml-key">port</span>: 3306                           <span class="yaml-comment"># Database server port (default: 3306 for MySQL)</span>
+    <span class="yaml-key">database</span>: myapp_prod                 <span class="yaml-comment"># Database name to connect to</span>
+    <span class="yaml-key">schema</span>: <span class="yaml-null">null</span>                        <span class="yaml-comment"># Schema name (PostgreSQL only; leave null for MySQL)</span>
+    <span class="yaml-key">user</span>: admin                          <span class="yaml-comment"># Database login username</span>
+    <span class="yaml-comment"># password: ***                        # Not exported; stored in IntelliJ PasswordSafe</span>
+    <span class="yaml-key">driver_jar</span>: <span class="yaml-null">null</span>                    <span class="yaml-comment"># Optional: custom JDBC driver jar path (null = use bundled driver)</span>
+    <span class="yaml-key">ssh</span>:                                 <span class="yaml-comment"># SSH tunnel config (omit section if no SSH)</span>
+      <span class="yaml-key">enabled</span>: <span class="yaml-val">true</span>                      <span class="yaml-comment"># Whether to use SSH tunnel</span>
+      <span class="yaml-key">host</span>: bastion.example.com          <span class="yaml-comment"># SSH server hostname</span>
+      <span class="yaml-key">port</span>: 22                           <span class="yaml-comment"># SSH server port</span>
+      <span class="yaml-key">user</span>: deploy                       <span class="yaml-comment"># SSH login username</span>
+      <span class="yaml-key">auth_type</span>: KEY                      <span class="yaml-comment"># SSH auth: PASSWORD or KEY</span>
+      <span class="yaml-comment"># ssh_password: ***                  # Not exported</span>
+      <span class="yaml-key">private_key_path</span>: /home/user/.ssh/id_rsa  <span class="yaml-comment"># Path to SSH private key (for KEY auth)</span>
+      <span class="yaml-comment"># ssh_key_passphrase: ***            # Not exported</span>
+      <span class="yaml-key">db_host</span>: 127.0.0.1                 <span class="yaml-comment"># Database host as seen from SSH server</span>
+      <span class="yaml-key">db_port</span>: 3306                       <span class="yaml-comment"># Database port as seen from SSH server</span>
+
+  <span class="yaml-comment">-</span> <span class="yaml-key">name</span>: staging-mysql                  <span class="yaml-comment"># Display name for this connection</span>
+    <span class="yaml-key">type</span>: MYSQL                         <span class="yaml-comment"># Database type: MYSQL or POSTGRESQL</span>
+    <span class="yaml-key">host</span>: staging.db.io                  <span class="yaml-comment"># Database server hostname or IP</span>
+    <span class="yaml-key">port</span>: 3306                           <span class="yaml-comment"># Database server port</span>
+    <span class="yaml-key">database</span>: myapp_staging              <span class="yaml-comment"># Database name to connect to</span>
+    <span class="yaml-key">schema</span>: <span class="yaml-null">null</span>                        <span class="yaml-comment"># Schema name (leave null for MySQL)</span>
+    <span class="yaml-key">user</span>: staging_user                   <span class="yaml-comment"># Database login username</span>
+    <span class="yaml-comment"># password: ***                        # Not exported; stored in IntelliJ PasswordSafe</span>
+    <span class="yaml-key">driver_jar</span>: <span class="yaml-null">null</span>                    <span class="yaml-comment"># Optional: custom JDBC driver jar path</span></div>
+</div>
+
+</body>
+</html>

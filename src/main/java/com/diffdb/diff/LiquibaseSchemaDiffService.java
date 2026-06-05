@@ -26,21 +26,23 @@ public class LiquibaseSchemaDiffService implements SchemaDiffService {
     public SchemaDiffResult diff(ConnectionConfig source, ConnectionConfig target, SecretResolver secrets)
             throws Exception {
 
-        try (ManagedConnection srcConn = ConnectionManager.open(
-                source, secrets.dbPassword(source), secrets.sshSecret(source));
-             ManagedConnection tgtConn = ConnectionManager.open(
-                     target, secrets.dbPassword(target), secrets.sshSecret(target))) {
+        return LiquibaseScope.run(() -> {
+            try (ManagedConnection srcConn = ConnectionManager.open(
+                    source, secrets.dbPassword(source), secrets.sshSecret(source));
+                 ManagedConnection tgtConn = ConnectionManager.open(
+                         target, secrets.dbPassword(target), secrets.sshSecret(target))) {
 
-            Database refDb = toLiquibaseDatabase(srcConn, source);
-            Database cmpDb = toLiquibaseDatabase(tgtConn, target);
+                Database refDb = toLiquibaseDatabase(srcConn, source);
+                Database cmpDb = toLiquibaseDatabase(tgtConn, target);
 
-            DiffResult diffResult = DiffGeneratorFactory.getInstance()
-                    .compare(refDb, cmpDb, new CompareControl());
+                DiffResult diffResult = DiffGeneratorFactory.getInstance()
+                        .compare(refDb, cmpDb, new CompareControl());
 
-            List<DiffNode> roots = buildTree(diffResult);
-            boolean empty = roots.isEmpty();
-            return new SchemaDiffResult(roots, diffResult, empty);
-        }
+                List<DiffNode> roots = buildTree(diffResult);
+                boolean empty = roots.isEmpty();
+                return new SchemaDiffResult(roots, diffResult, empty);
+            }
+        });
     }
 
     private Database toLiquibaseDatabase(ManagedConnection mc, ConnectionConfig config) throws Exception {
@@ -99,6 +101,10 @@ public class LiquibaseSchemaDiffService implements SchemaDiffService {
             DiffNode typeNode = root.addChild(DiffNode.container(typeEntry.getKey()));
             for (Map.Entry<? extends DatabaseObject, ObjectDifferences> e : typeEntry.getValue()) {
                 String detail = summarize(e.getValue());
+                // Skip if the only difference was column ordering
+                if (detail.isEmpty()) {
+                    continue;
+                }
                 typeNode.addChild(new DiffNode(typeEntry.getKey(),
                         objectName(e.getKey()), DiffCategory.CHANGED, detail));
             }
@@ -109,10 +115,27 @@ public class LiquibaseSchemaDiffService implements SchemaDiffService {
     private String summarize(ObjectDifferences differences) {
         StringBuilder sb = new StringBuilder();
         if (differences != null) {
-            differences.getDifferences().forEach(d -> {
+            for (liquibase.diff.Difference d : differences.getDifferences()) {
+                String field = d.getField();
+                // Skip column ordering / position changes — irrelevant for structural diff
+                if (field != null && (field.equalsIgnoreCase("ordering") || field.equalsIgnoreCase("order"))) {
+                    continue;
+                }
                 if (sb.length() > 0) sb.append("; ");
-                sb.append(d.getField());
-            });
+                Object oldVal = d.getReferenceValue();
+                Object newVal = d.getComparedValue();
+                String oldStr = oldVal == null ? "null" : oldVal.toString();
+                String newStr = newVal == null ? "null" : newVal.toString();
+                // Skip meaningless diffs where string representation is identical
+                // (e.g. Integer(0) vs Long(0) — different types but same value)
+                if (oldStr.equals(newStr)) {
+                    continue;
+                }
+                // Truncate very long values
+                if (oldStr.length() > 40) oldStr = oldStr.substring(0, 37) + "...";
+                if (newStr.length() > 40) newStr = newStr.substring(0, 37) + "...";
+                sb.append(field).append(": ").append(oldStr).append(" -> ").append(newStr);
+            }
         }
         return sb.toString();
     }
@@ -123,6 +146,25 @@ public class LiquibaseSchemaDiffService implements SchemaDiffService {
 
     private String objectName(DatabaseObject obj) {
         String name = obj.getName();
-        return name == null ? obj.toString() : name;
+        if (name == null) {
+            return obj.toString();
+        }
+        // Try multiple attribute names for parent table/relation
+        DatabaseObject parent = findParent(obj);
+        if (parent != null && parent.getName() != null) {
+            name = parent.getName() + "." + name;
+        }
+        return name;
+    }
+
+    private DatabaseObject findParent(DatabaseObject obj) {
+        String[] attrNames = {"relation", "table", "foreignKeyTable", "primaryKeyTable"};
+        for (String attr : attrNames) {
+            Object raw = obj.getAttribute(attr, Object.class);
+            if (raw instanceof DatabaseObject parent) {
+                return parent;
+            }
+        }
+        return null;
     }
 }
