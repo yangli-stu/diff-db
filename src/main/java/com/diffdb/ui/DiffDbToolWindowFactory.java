@@ -1,0 +1,24 @@
+package com.diffdb.ui;
+
+import com.intellij.openapi.project.DumbAware;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.wm.ToolWindow;
+import com.intellij.openapi.wm.ToolWindowFactory;
+import com.intellij.ui.content.Content;
+import com.intellij.ui.content.ContentFactory;
+import org.jetbrains.annotations.NotNull;
+
+/**
+ * Registers the DiffDB tool window.
+ */
+public class DiffDbToolWindowFactory implements ToolWindowFactory, DumbAware {
+
+    @Override
+    public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
+        DiffDbPanel panel = new DiffDbPanel(project);
+        ContentFactory contentFactory = ContentFactory.getInstance();
+        Content content = contentFactory.createContent(panel, "", false);
+        content.setCloseable(false);
+        toolWindow.getContentManager().addContent(content);
+    }
+}

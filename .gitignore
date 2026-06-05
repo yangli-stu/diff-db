@@ -1,0 +1,38 @@
+### Gradle ###
+.gradle/
+build/
+.intellijPlatform/
+# Keep the wrapper jar tracked so the project builds out of the box
+!gradle/wrapper/gradle-wrapper.jar
+
+### IntelliJ IDEA ###
+out/
+*.iml
+.idea/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### Mac OS ###
+.DS_Store
