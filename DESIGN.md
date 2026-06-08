@@ -2,7 +2,7 @@
 
 > 一个面向 **IntelliJ IDEA Community / Ultimate** 的数据库结构对比插件。
 > 直连或经 SSH 隧道对比两个数据库(MySQL / PostgreSQL)的结构差异，
-> 以可视化差异树展示，并生成可编辑、可导出的迁移 SQL。
+> 以可视化差异表格展示，并生成可编辑、可导出的迁移 SQL。
 
 ---
 
@@ -12,10 +12,10 @@
 |------|------|
 | 解决的痛点 | IDEA 原生「Compare Structure」是 **Ultimate 付费**；JPA Buddy 的 diff 也需 Ultimate 且绑定 JPA 生态 |
 | 差异化 | **Community 也能用** 的纯 JDBC schema diff，不依赖 JPA/Flyway/Liquibase 工程结构 |
-| 核心能力 | 双库结构对比 → 可视化差异树 → 生成目标库方言迁移 SQL → 导出 / 复制 |
+| 核心能力 | 双库结构对比 → 可视化差异表格 → 生成目标库方言迁移 SQL → 导出 / 复制 |
 | 首发数据库 | **MySQL、PostgreSQL** |
 | 远程支持 | SSH 本地端口转发隧道 |
-| 分发 | JetBrains Marketplace（个人 vendor，Non-trader，免费开源起步） |
+| 分发 | IntelliJ IDEA 插件（免费开源） |
 
 ---
 
@@ -26,7 +26,7 @@
 | 层 | 选型 | 理由 |
 |----|------|------|
 | 语言 | **Java 17**（源码级别，运行于 IDE 自带 JBR 17/21） | 平台要求，兼容性好 |
-| 构建 | **Gradle (Kotlin DSL) + IntelliJ Platform Gradle Plugin 2.x** | 官方推荐，支持 `runIde` / `buildPlugin` / `publishPlugin` |
+| 构建 | **Gradle (Kotlin DSL) + IntelliJ Platform Gradle Plugin 2.x** | 官方推荐，支持 `runIde` / `buildPlugin` |
 | Diff 引擎 | **Liquibase Core 4.x** | 内置多库 snapshot + `DiffResult`，开源 Apache 2.0，省 80% 工作 |
 | 迁移 SQL | Liquibase `DiffToChangeLog` + `SqlGeneratorFactory` | 同一 `DiffResult` 直接出目标库方言 SQL |
 | 元数据 | Liquibase snapshot（底层 JDBC `DatabaseMetaData` / `information_schema`） | 表/列/索引/约束/外键/视图齐全 |
@@ -34,9 +34,9 @@
 | JDBC 驱动 | MySQL / PostgreSQL 驱动 **运行时按需**，不强制打包 | 控制体积，规避许可证 |
 | 凭据存储 | IntelliJ **PasswordSafe** | 密码/私钥口令不落明文 |
 | 配置持久化 | **PersistentStateComponent**（仅存非敏感字段） | 连接列表随项目/应用保存 |
-| UI | IntelliJ Platform Swing（ToolWindow / `DialogWrapper` / `Tree` / `DiffManager`） | 与 IDE 风格一致 |
+| UI | IntelliJ Platform Swing（ToolWindow / `DialogWrapper` / `Table` / `DiffManager`） | 与 IDE 风格一致 |
 | 测试 | JUnit 5 + H2 | 内存双库做 diff 单测 |
-| 许可证 | Apache 2.0 | 便于开源上架 |
+| 许可证 | Apache 2.0 | 开源友好 |
 
 ### 2.2 为什么不选 Calcite
 
@@ -47,7 +47,7 @@ Calcite 定位是 SQL 查询解析/优化，**核心不支持 DDL**，server 模
 - JDBC 驱动用 `compileOnly`，运行时由用户提供/下载，不打包。
 - `liquibase-core` 排除用不到的传递依赖（如 `picocli`、按需排除 `snakeyaml`）。
 - 复用 IDE 平台已自带库（Gson、commons-lang3 等）。
-- 预期插件包 ~10–20MB，远低于 Marketplace 400MB 上限。
+- 预期插件包 ~10–20MB，远低于平台 400MB 上限。
 
 ---
 
@@ -57,7 +57,7 @@ Calcite 定位是 SQL 查询解析/优化，**核心不支持 DDL**，server 模
 +-------------------------------------------------------------+
 |                          UI 层                               |
 |  ToolWindow / DiffDbPanel / ConnectionDialog                |
-|  DiffTree(差异树) / MigrationPreview(SQL 预览编辑)            |
+|  DiffResultTable(差异表格) / MigrationPreview(SQL 预览编辑)  |
 +-------------------------------------------------------------+
 |                        应用服务层                            |
 |  ConnectionStorageService(持久化) / CredentialService(凭据)  |
@@ -93,7 +93,7 @@ Calcite 定位是 SQL 查询解析/优化，**核心不支持 DDL**，server 模
 - [ ] infra：JDBC URL 构建、驱动加载、连接管理、SSH 隧道
 - [ ] core：`SchemaDiffService`（双库 → `SchemaDiffResult`）
 - [ ] core：`MigrationSqlGenerator`（diff → 目标方言 SQL）
-- [ ] ui：连接对话框 + 差异树 + SQL 预览
+- [ ] ui：连接对话框 + 差异表格 + SQL 预览
 - [ ] service：连接持久化 + PasswordSafe 凭据
 
 ### Phase 2 增强
@@ -102,10 +102,10 @@ Calcite 定位是 SQL 查询解析/优化，**核心不支持 DDL**，server 模
 - [ ] 导出 Flyway / Liquibase changelog
 - [ ] 对象类型过滤（表/索引/外键/视图）
 
-### Phase 3 上架
+### Phase 3 执行与导出
 - [ ] 直连库执行迁移（二次确认 + 事务）
-- [ ] CHANGELOG / EULA / 隐私声明
-- [ ] 插件签名 + `publishPlugin`
+- [ ] 导出 Flyway / Liquibase changelog 格式
+- [ ] 对象类型过滤（表/索引/外键/视图）
 
 ---
 
@@ -142,10 +142,10 @@ Calcite 定位是 SQL 查询解析/优化，**核心不支持 DDL**，server 模
 | 类 | 职责 |
 |----|------|
 | `DiffCategory`（enum） | MISSING（目标缺，需新增）/ UNEXPECTED（目标多，需删除）/ CHANGED（有差异） |
-| `DiffNode` | UI 解耦的差异节点：对象类型(table/column/index...)、名称、类别、详情；树形 children。**不引用 Liquibase 类型** |
+| `DiffNode` | UI 解耦的差异节点：对象类型(table/column/index...)、名称、类别、详情；含 children 支持层级。**不引用 Liquibase 类型** |
 | `SchemaDiffResult` | 一次对比的结果：根 `DiffNode` 列表 + 原始 `DiffResult`（供生成 SQL 用，封装在 core 内不外泄到 UI） |
 | `SchemaDiffService`（接口） | `SchemaDiffResult diff(ConnectionConfig source, ConnectionConfig target)` |
-| `LiquibaseSchemaDiffService`（实现） | 用 `ConnectionManager` 取连接 → Liquibase `DatabaseFactory`/`DiffGeneratorFactory.compare` → 映射成 `DiffNode` 树 |
+| `LiquibaseSchemaDiffService`（实现） | 用 `ConnectionManager` 取连接 → Liquibase `DatabaseFactory`/`DiffGeneratorFactory.compare` → 映射成 `DiffNode` 列表 |
 
 ### 5.5 core/migration
 
@@ -167,17 +167,17 @@ Calcite 定位是 SQL 查询解析/优化，**核心不支持 DDL**，server 模
 | 类 | 职责 |
 |----|------|
 | `DiffDbToolWindowFactory`（`ToolWindowFactory`） | 注册 ToolWindow，创建 `DiffDbPanel` |
-| `DiffDbPanel` | 主面板：源/目标连接选择、操作按钮（编辑连接/对比/生成 SQL）、承载差异树与 SQL 预览的分栏 |
+| `DiffDbPanel` | 主面板：源/目标连接选择、操作按钮（编辑连接/对比/生成 SQL）、承载差异表格与 SQL 预览的分栏 |
 | `ConnectionDialog`（`DialogWrapper`） | 编辑单个 `ConnectionConfig`：基础参数 + SSH 折叠区；测试连接；保存（密码写 PasswordSafe） |
-| `DiffTreePanel` | 用 `SchemaDiffResult` 渲染差异树；按类别着色（新增/删除/变更） |
-| `DiffTreeCellRenderer` | 树节点图标/颜色（DROP 红色警示等） |
+| `DiffResultTablePanel` | 用 `SchemaDiffResult` 渲染差异表格；Object / Type / Change / Detail 四列展示 |
+| `DiffResultTableModel` | 表格模型：扁平化 `DiffNode`，过滤无意义的 ordering / defaultValue 变化 |
 | `MigrationPreviewPanel` | 展示生成的迁移 SQL（可编辑 EditorTextField）；复制 / 导出 .sql |
 
 ### 5.8 action
 
 | 类 | 职责 |
 |----|------|
-| `RunDiffAction` | 触发 `SchemaDiffService.diff` 并刷新差异树（后台任务 `Task.Backgroundable`） |
+| `RunDiffAction` | 触发 `SchemaDiffService.diff` 并刷新差异表格（后台任务 `Task.Backgroundable`） |
 | `GenerateMigrationAction` | 触发 `MigrationSqlGenerator.generate` 并填充预览面板 |
 
 ---
@@ -191,8 +191,8 @@ Calcite 定位是 SQL 查询解析/优化，**核心不支持 DDL**，server 模
   → LiquibaseSchemaDiffService.diff()
       → DatabaseFactory 包装两个 Connection
       → DiffGeneratorFactory.compare() 得 DiffResult
-      → 映射为 DiffNode 树 → SchemaDiffResult
-  → DiffTreePanel 渲染
+      → 映射为 DiffNode 列表 → SchemaDiffResult
+  → DiffResultTablePanel 渲染
   → 关闭连接与隧道
 ```
 
@@ -216,7 +216,7 @@ Calcite 定位是 SQL 查询解析/优化，**核心不支持 DDL**，server 模
 | SSH Host Key | MVP 先 `StrictHostKeyChecking=no`，Phase 2 接入 known_hosts 指纹校验 |
 | 危险 DDL | DROP 类语句 UI 红色高亮 + 「仅生成增量」开关 |
 | 直连执行 | 默认只预览/导出；执行需二次确认 |
-| 隐私 | 不收集用户数据，上架时声明「No data collected」 |
+| 隐私 | 不收集用户数据，声明「No data collected」 |
 
 ---
 
@@ -231,8 +231,7 @@ diff-db/
 ├── DESIGN.md
 ├── README.md
 ├── docs/
-│   ├── LOCAL_RUN.md        # 本地运行与沙箱调试
-│   └── RELEASE.md          # 上架流程与产品 TODO
+│   └── LOCAL_RUN.md        # 本地运行与沙箱调试
 └── src/
     ├── main/
     │   ├── java/com/diffdb/
@@ -242,8 +241,9 @@ diff-db/
     │   │   ├── diff/       DiffCategory, DiffNode, SchemaDiffResult, SchemaDiffService, LiquibaseSchemaDiffService
     │   │   ├── migration/  MigrationOptions, MigrationSqlGenerator, LiquibaseMigrationSqlGenerator
     │   │   ├── service/    ConnectionStorageService, CredentialService
-    │   │   └── ui/         DiffDbToolWindowFactory, DiffDbPanel, ConnectionDialog,
-    │   │                   DiffTreePanel, DiffTreeCellRenderer, MigrationPreviewPanel
+│   │   └── ui/         DiffDbToolWindowFactory, DiffDbPanel, ConnectionDialog,
+│   │                   DbManagerPanel, ShowTablesDialog,
+│   │                   DiffResultTablePanel, DiffResultTableModel, MigrationPreviewPanel
     │   └── resources/
     │       └── META-INF/plugin.xml, pluginIcon.svg
     └── test/

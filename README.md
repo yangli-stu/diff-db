@@ -2,20 +2,28 @@
 
 An IntelliJ IDEA plugin that compares the **structure of two databases**
 (MySQL / PostgreSQL), directly or over an **SSH tunnel**, shows the differences
-as a colour-coded tree, and generates **dialect-aware migration SQL**.
+in a **colour-coded table**, and generates **dialect-aware migration SQL**.
 
 Works in both **Community** and Ultimate editions — unlike IDEA's built-in
 "Compare Structure" (Ultimate-only) and JPA Buddy's diff (Ultimate + JPA-bound).
 
 ## Features
 
-- Compare two databases' schemas (tables, columns, indexes, keys, FKs, views…)
-- Visual diff tree: green = to create, red = to drop, orange = changed
-- Generate migration SQL in the target's dialect; copy or export `.sql`
-- Direct or SSH-tunnelled connections
-- Secrets stored in IntelliJ PasswordSafe (never in plain text)
+- **Schema comparison**: tables, columns, indexes, keys, foreign keys, views, and more
+- **Visual diff table**: ADD (green) / DROP (red) / MODIFY (orange) — clearly categorised
+- **Migration SQL generation**: target-dialect-aware DDL, with copy and export support
+- **SSH tunnel support**: connect through local-port-forwarding tunnels
+- **Connection management**: add, edit, delete, import/export connection profiles
+- **Safe by design**: passwords and secrets are never stored in plain text
 
-## Tech stack
+## Privacy & Security
+
+- **No data collection**: the plugin does not send any data to external servers
+- **Passwords are encrypted**: all secrets (database passwords, SSH passphrases) are stored in IntelliJ's **PasswordSafe** — never written to disk in plain text
+- **Local-only processing**: schema comparison and SQL generation happen entirely within the IDE; your database schemas never leave your machine
+- **No telemetry or analytics**: we do not track usage, crashes, or behaviour
+
+## Tech Stack
 
 | Concern | Choice |
 |---------|--------|
@@ -27,14 +35,6 @@ Works in both **Community** and Ultimate editions — unlike IDEA's built-in
 | Tests | JUnit 5 + H2 |
 
 See [DESIGN.md](DESIGN.md) for the full architecture and class responsibilities.
-
-## Documentation
-
-| Doc | Content |
-|-----|---------|
-| [docs/LOCAL_RUN.md](docs/LOCAL_RUN.md) | 本地环境、Gradle 命令、沙箱调试、手动验证 |
-| [docs/RELEASE.md](docs/RELEASE.md) | Marketplace 上架流程、签名发布、产品 TODO |
-| [DESIGN.md](DESIGN.md) | 技术选型与类级别职责 |
 
 ## Develop
 
@@ -54,32 +54,11 @@ See [DESIGN.md](DESIGN.md) for the full architecture and class responsibilities.
 
 > First Gradle run downloads the IntelliJ Platform SDK; it may take a while.
 
-## JDBC drivers
+## JDBC Drivers
 
 MySQL and PostgreSQL drivers are **bundled** with the plugin so **Test Connection**
 works without extra setup. Use **Driver jar (override, optional)** only when you
 need a specific driver version.
-
-## Publish to JetBrains Marketplace
-
-See **[docs/RELEASE.md](docs/RELEASE.md)** for the full checklist, first-time manual upload,
-signing, `publishPlugin`, and the product TODO backlog.
-
-Quick reference:
-
-1. Build & sign:
-   ```bash
-   export CERTIFICATE_CHAIN=... PRIVATE_KEY=... PRIVATE_KEY_PASSWORD=...
-   ./gradlew signPlugin buildPlugin
-   ```
-2. First upload is manual at <https://plugins.jetbrains.com/>.
-3. Later releases:
-   ```bash
-   export PUBLISH_TOKEN=...   # Marketplace → My Tokens
-   ./gradlew publishPlugin
-   ```
-
-Individual developers can publish (Non-trader for a free plugin).
 
 ## License
 
