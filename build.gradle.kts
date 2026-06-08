@@ -60,7 +60,7 @@ intellijPlatform {
 
         description = """
             Compare the schema of two databases (MySQL / PostgreSQL), directly or over an SSH tunnel,
-            visualize the differences as a tree, and generate dialect-aware migration SQL.
+            visualize the differences as a table, and generate dialect-aware migration SQL.
             Works in both Community and Ultimate editions.
         """.trimIndent()
     }
