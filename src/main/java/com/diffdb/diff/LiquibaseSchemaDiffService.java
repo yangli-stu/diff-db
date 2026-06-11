@@ -23,26 +23,46 @@ import java.util.Set;
 public class LiquibaseSchemaDiffService implements SchemaDiffService {
 
     @Override
-    public SchemaDiffResult diff(ConnectionConfig source, ConnectionConfig target, SecretResolver secrets)
+    public SchemaDiffResult diff(ConnectionConfig source, ConnectionConfig target, SecretResolver secrets,
+                                 ProgressListener listener)
             throws Exception {
 
         return LiquibaseScope.run(() -> {
+            step(listener, "Connecting to source database...");
             try (ManagedConnection srcConn = ConnectionManager.open(
-                    source, secrets.dbPassword(source), secrets.sshSecret(source));
-                 ManagedConnection tgtConn = ConnectionManager.open(
-                         target, secrets.dbPassword(target), secrets.sshSecret(target))) {
+                    source, secrets.dbPassword(source), secrets.sshSecret(source))) {
 
-                Database refDb = toLiquibaseDatabase(srcConn, source);
-                Database cmpDb = toLiquibaseDatabase(tgtConn, target);
+                step(listener, "Connecting to target database...");
+                try (ManagedConnection tgtConn = ConnectionManager.open(
+                        target, secrets.dbPassword(target), secrets.sshSecret(target))) {
 
-                DiffResult diffResult = DiffGeneratorFactory.getInstance()
-                        .compare(refDb, cmpDb, new CompareControl());
+                    step(listener, "Reading source schema...");
+                    Database refDb = toLiquibaseDatabase(srcConn, source);
 
-                List<DiffNode> roots = buildTree(diffResult);
-                boolean empty = roots.isEmpty();
-                return new SchemaDiffResult(roots, diffResult, empty);
+                    step(listener, "Reading target schema...");
+                    Database cmpDb = toLiquibaseDatabase(tgtConn, target);
+
+                    step(listener, "Comparing schemas...");
+                    DiffResult diffResult = DiffGeneratorFactory.getInstance()
+                            .compare(refDb, cmpDb, new CompareControl());
+
+                    step(listener, "Building diff result...");
+                    List<DiffNode> roots = buildTree(diffResult);
+                    boolean empty = roots.isEmpty();
+                    String srcSchema = source.getEffectiveSchema();
+                    if (srcSchema == null || srcSchema.isBlank()) srcSchema = refDb.getDefaultSchemaName();
+                    String tgtSchema = target.getEffectiveSchema();
+                    if (tgtSchema == null || tgtSchema.isBlank()) tgtSchema = cmpDb.getDefaultSchemaName();
+                    return new SchemaDiffResult(roots, diffResult, empty, srcSchema, tgtSchema);
+                }
             }
         });
+    }
+
+    private static void step(ProgressListener listener, String message) {
+        if (listener != null) {
+            listener.onStep(message);
+        }
     }
 
     private Database toLiquibaseDatabase(ManagedConnection mc, ConnectionConfig config) throws Exception {
@@ -51,7 +71,14 @@ public class LiquibaseSchemaDiffService implements SchemaDiffService {
         if (config.getSchema() != null && !config.getSchema().isBlank()) {
             db.setDefaultSchemaName(config.getSchema());
         }
+        // Avoid repeated Liquibase metadata table lookups during snapshot; speeds up large schemas
+        db.setCanCacheLiquibaseTableInfo(true);
         return db;
+    }
+
+    /** Exposed for TwoStepDiffService. */
+    public List<DiffNode> buildTreePublic(DiffResult diff) {
+        return buildTree(diff);
     }
 
     private List<DiffNode> buildTree(DiffResult diff) {

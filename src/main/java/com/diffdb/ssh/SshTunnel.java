@@ -14,10 +14,19 @@ import java.util.Properties;
  * <p>Opens {@code localhost:<random>} forwarded to {@code dbHost:dbPort} relative
  * to the SSH host. JDBC then connects to {@link #getLocalHost()}:{@link #getLocalPort()}.
  * The tunnel is transparent to the diff engine.
+ *
+ * <p>Connection is tuned for stability over long-running schema snapshots:
+ * <ul>
+ *   <li>No global socket timeout — schema snapshots can take minutes; we must not kill the tunnel mid-query</li>
+ *   <li>Server-alive messages keep the tunnel alive during idle periods</li>
+ *   <li>5-second connect timeout only for the initial SSH handshake</li>
+ * </ul>
  */
 public class SshTunnel implements AutoCloseable {
 
-    private static final int CONNECT_TIMEOUT_MS = 15_000;
+    private static final int CONNECT_TIMEOUT_MS = 5_000;
+    private static final int SERVER_ALIVE_INTERVAL_MS = 30_000;
+    private static final int SERVER_ALIVE_COUNT_MAX = 3;
 
     private final Session session;
     private final int localPort;
@@ -56,7 +65,19 @@ public class SshTunnel implements AutoCloseable {
         Properties props = new Properties();
         // MVP: skip host key verification. Phase 2 wires known_hosts fingerprint check.
         props.put("StrictHostKeyChecking", "no");
+        // Disable compression: small metadata queries don't compress well, overhead adds latency
+        props.put("Compression", "none");
+        // Disable Nagle's algorithm for faster small packet round-trips (index/column metadata queries)
+        props.put("TCP_NODELAY", "true");
+        // Limit auth methods to fast ones; avoid slow GSSAPI/keyboard-interactive
+        props.put("PreferredAuthentications", "publickey,password");
         session.setConfig(props);
+
+        // Keep-alive prevents idle SSH connections from being dropped by firewalls during long diffs
+        session.setServerAliveInterval(SERVER_ALIVE_INTERVAL_MS);
+        session.setServerAliveCountMax(SERVER_ALIVE_COUNT_MAX);
+        // Do NOT set a general socket timeout — long-running schema snapshots (minutes) must not be killed
+        // session.setTimeout(...) would abort the SSH tunnel mid-query.
 
         session.connect(CONNECT_TIMEOUT_MS);
 

@@ -2,10 +2,14 @@ package com.diffdb.migration;
 
 import com.diffdb.diff.LiquibaseScope;
 import com.diffdb.diff.SchemaDiffResult;
+import com.diffdb.model.DatabaseType;
 import com.intellij.openapi.diagnostic.Logger;
 import liquibase.change.Change;
 import liquibase.changelog.ChangeSet;
 import liquibase.database.Database;
+import liquibase.database.core.H2Database;
+import liquibase.database.core.MySQLDatabase;
+import liquibase.database.core.PostgresDatabase;
 import liquibase.diff.DiffResult;
 import liquibase.diff.output.DiffOutputControl;
 import liquibase.diff.output.changelog.DiffToChangeLog;
@@ -44,6 +48,23 @@ public class LiquibaseMigrationSqlGenerator implements MigrationSqlGenerator {
         Database targetDb = comparisonSnapshot.getDatabase();
         if (targetDb == null) {
             return "-- Error: target database is null; the diff may not have been computed correctly.";
+        }
+
+        // When the diff was computed via H2 intermediate, replace the database
+        // type with the target type so SQL is dialect-aware (MODIFY COLUMN
+        // instead of ALTER COLUMN, DROP TABLE IF EXISTS, etc.).
+        if (options.getTargetDatabaseType() != null) {
+            try {
+                Database dialectDb = switch (options.getTargetDatabaseType()) {
+                    case MYSQL -> new MySQLDatabase();
+                    case POSTGRESQL -> new PostgresDatabase();
+                };
+                dialectDb.setConnection(targetDb.getConnection());
+                dialectDb.setDefaultSchemaName(targetDb.getDefaultSchemaName());
+                targetDb = dialectDb;
+            } catch (Exception e) {
+                LOG.warn("Failed to substitute target-type database for SQL generation: " + e.getMessage());
+            }
         }
 
         DiffOutputControl outputControl = new DiffOutputControl(
@@ -178,5 +199,10 @@ public class LiquibaseMigrationSqlGenerator implements MigrationSqlGenerator {
 
     private boolean isDrop(Change change) {
         return change.getClass().getSimpleName().startsWith("Drop");
+    }
+
+    private static String toShortName(DatabaseType type) {
+        if (type == DatabaseType.POSTGRESQL) return "postgresql";
+        return "mysql";
     }
 }

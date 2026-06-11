@@ -1,5 +1,6 @@
 package com.diffdb.connection;
 
+import com.diffdb.model.ConnectionConfig;
 import com.diffdb.ssh.SshTunnel;
 
 import java.sql.Connection;
@@ -12,14 +13,20 @@ public class ManagedConnection implements AutoCloseable {
 
     private final Connection connection;
     private final SshTunnel tunnel; // nullable
+    private final ConnectionConfig config;
 
-    public ManagedConnection(Connection connection, SshTunnel tunnel) {
+    public ManagedConnection(Connection connection, SshTunnel tunnel, ConnectionConfig config) {
         this.connection = connection;
         this.tunnel = tunnel;
+        this.config = config;
     }
 
     public Connection getConnection() {
         return connection;
+    }
+
+    public ConnectionConfig getConfig() {
+        return config;
     }
 
     @Override

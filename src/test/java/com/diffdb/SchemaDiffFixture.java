@@ -1,15 +1,9 @@
 package com.diffdb;
 
 import com.diffdb.diff.SchemaDiffResult;
-import com.diffdb.migration.LiquibaseMigrationSqlGenerator;
+import com.diffdb.diff.TwoStepDiffService;
+import com.diffdb.migration.FastMigrationSqlGenerator;
 import com.diffdb.migration.MigrationOptions;
-import liquibase.database.Database;
-import liquibase.database.DatabaseFactory;
-import liquibase.database.jvm.JdbcConnection;
-import liquibase.diff.DiffResult;
-import liquibase.diff.DiffGeneratorFactory;
-import liquibase.diff.compare.CompareControl;
-import liquibase.structure.DatabaseObject;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -17,30 +11,25 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
 
-/**
- * Loads {@code origin_db.sql} / {@code target_db.sql} from {@code src/test/resources/<case>/}
- * into two H2 in-memory databases and runs a Liquibase schema diff.
- *
- * <p>Direction convention: <b>origin</b> is the old database to be upgraded,
- * <b>target</b> is the desired/new state. Liquibase is called with
- * {@code reference = target} and {@code comparison = origin}, so:
- * <ul>
- *   <li>{@link #hasMissing} = present in target but not origin = needs to be created on origin</li>
- *   <li>{@link #hasUnexpected} = present in origin but not target = needs to be dropped from origin</li>
- *   <li>{@link #upgradeSql} = the SQL that migrates origin up to target</li>
- * </ul>
- */
+    /**
+     * Loads {@code origin_db.sql} / {@code target_db.sql} from {@code src/test/resources/<case>/}
+     * into two H2 in-memory databases and runs a schema diff.
+     *
+     * <p>Direction convention: <b>origin</b> is the old database to be upgraded,
+     * <b>target</b> is the desired/new state.
+     * <ul>
+     *   <li>{@link #hasMissing} = present in target (desired) but not origin (old) = needs to be created on origin</li>
+     *   <li>{@link #hasUnexpected} = present in origin (old) but not target (desired) = needs to be dropped from origin</li>
+     *   <li>{@link #upgradeSql} = the SQL that migrates origin up to target</li>
+     * </ul>
+     */
 public final class SchemaDiffFixture {
 
     private SchemaDiffFixture() {
     }
 
-    @FunctionalInterface
-    private interface DiffFunction<T> {
-        T apply(DiffResult diff) throws Exception;
-    }
-
-    private static <T> T withDiff(String caseName, DiffFunction<T> fn) throws Exception {
+    /** Runs the diff for a case and returns the result (connections already closed). */
+    public static SchemaDiffResult diffCase(String caseName) throws Exception {
         String id = caseName + "-" + java.util.UUID.randomUUID();
         try (Connection origin = h2(id + "-origin");
              Connection target = h2(id + "-target")) {
@@ -48,22 +37,11 @@ public final class SchemaDiffFixture {
             applyScript(origin, loadScript(caseName, "origin_db.sql"));
             applyScript(target, loadScript(caseName, "target_db.sql"));
 
-            // reference = desired (target), comparison = to-be-upgraded (origin)
-            Database referenceDb = DatabaseFactory.getInstance()
-                    .findCorrectDatabaseImplementation(new JdbcConnection(target));
-            Database comparisonDb = DatabaseFactory.getInstance()
-                    .findCorrectDatabaseImplementation(new JdbcConnection(origin));
-
-            DiffResult diff = DiffGeneratorFactory.getInstance()
-                    .compare(referenceDb, comparisonDb, new CompareControl());
-
-            return fn.apply(diff);
+            TwoStepDiffService service = new TwoStepDiffService();
+            // source = target (desired/new), target = origin (old/current)
+            // H2 MySQL mode → use "mysql" Liquibase short name
+            return service.diff(target, origin, "PUBLIC", "mysql");
         }
-    }
-
-    /** Runs the diff for a case and returns the raw result (connections already closed). */
-    public static DiffResult diffCase(String caseName) throws Exception {
-        return withDiff(caseName, d -> d);
     }
 
     /**
@@ -72,44 +50,67 @@ public final class SchemaDiffFixture {
      * @param includeDrops whether to emit DROP statements for objects only in origin
      */
     public static String upgradeSql(String caseName, boolean includeDrops) throws Exception {
-        return withDiff(caseName, diff -> {
-            MigrationOptions options = new MigrationOptions();
-            options.setIncludeDrops(includeDrops);
-            return new LiquibaseMigrationSqlGenerator()
-                    .generate(new SchemaDiffResult(null, diff, false), options);
-        });
+        SchemaDiffResult diff = diffCase(caseName);
+        MigrationOptions options = new MigrationOptions();
+        options.setIncludeDrops(includeDrops);
+        return new FastMigrationSqlGenerator().generate(diff, options);
     }
 
-    public static boolean hasMissing(DiffResult diff, String typeSimpleName, String objectName) {
-        return diff.getMissingObjects().stream()
-                .anyMatch(o -> matches(o, typeSimpleName, objectName));
+    public static boolean hasMissing(SchemaDiffResult diff, String typeSimpleName, String objectName) {
+        return hasInCategory(diff, com.diffdb.diff.DiffCategory.MISSING, typeSimpleName, objectName);
     }
 
-    public static boolean hasUnexpected(DiffResult diff, String typeSimpleName, String objectName) {
-        return diff.getUnexpectedObjects().stream()
-                .anyMatch(o -> matches(o, typeSimpleName, objectName));
+    public static boolean hasUnexpected(SchemaDiffResult diff, String typeSimpleName, String objectName) {
+        return hasInCategory(diff, com.diffdb.diff.DiffCategory.UNEXPECTED, typeSimpleName, objectName);
     }
 
-    public static boolean hasAnyMissingOfType(DiffResult diff, String typeSimpleName) {
-        return diff.getMissingObjects().stream()
-                .anyMatch(o -> typeSimpleName.equals(o.getClass().getSimpleName()));
+    public static boolean hasAnyMissingOfType(SchemaDiffResult diff, String typeSimpleName) {
+        for (com.diffdb.diff.DiffNode root : diff.getRoots()) {
+            for (com.diffdb.diff.DiffNode typeNode : root.getChildren()) {
+                if (!typeSimpleName.equals(typeNode.getObjectType())) continue;
+                for (com.diffdb.diff.DiffNode item : typeNode.getChildren()) {
+                    if (item.getCategory() == com.diffdb.diff.DiffCategory.MISSING) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
-    public static boolean hasAnyChanged(DiffResult diff) {
-        return !diff.getChangedObjects().isEmpty();
+    public static boolean hasAnyChanged(SchemaDiffResult diff) {
+        for (com.diffdb.diff.DiffNode root : diff.getRoots()) {
+            for (com.diffdb.diff.DiffNode typeNode : root.getChildren()) {
+                for (com.diffdb.diff.DiffNode item : typeNode.getChildren()) {
+                    if (item.getCategory() == com.diffdb.diff.DiffCategory.CHANGED) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
-    public static boolean hasChangedOn(DiffResult diff, String typeSimpleName, String objectName) {
-        return diff.getChangedObjects().keySet().stream()
-                .anyMatch(o -> matches(o, typeSimpleName, objectName));
+    public static boolean hasChangedOn(SchemaDiffResult diff, String typeSimpleName, String objectName) {
+        return hasInCategory(diff, com.diffdb.diff.DiffCategory.CHANGED, typeSimpleName, objectName);
     }
 
-    private static boolean matches(DatabaseObject o, String typeSimpleName, String objectName) {
-        return typeSimpleName.equals(o.getClass().getSimpleName())
-                && objectName.equalsIgnoreCase(String.valueOf(o.getName()));
+    private static boolean hasInCategory(SchemaDiffResult diff, com.diffdb.diff.DiffCategory category,
+                                          String typeSimpleName, String objectName) {
+        for (com.diffdb.diff.DiffNode root : diff.getRoots()) {
+            for (com.diffdb.diff.DiffNode typeNode : root.getChildren()) {
+                if (!typeSimpleName.equals(typeNode.getObjectType())) continue;
+                for (com.diffdb.diff.DiffNode item : typeNode.getChildren()) {
+                    if (item.getCategory() == category && objectName.equalsIgnoreCase(item.getName())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
-    private static String loadScript(String caseName, String fileName) throws Exception {
+    public static String loadScript(String caseName, String fileName) throws Exception {
         String path = caseName + "/" + fileName;
         try (InputStream in = SchemaDiffFixture.class.getClassLoader().getResourceAsStream(path)) {
             if (in == null) {
@@ -119,7 +120,7 @@ public final class SchemaDiffFixture {
         }
     }
 
-    private static void applyScript(Connection conn, String script) throws Exception {
+    public static void applyScript(Connection conn, String script) throws Exception {
         // Sanitize first (drop comments / MySQL-only table options), THEN split on ';'.
         String cleaned = sanitizeSql(script);
         for (String part : cleaned.split(";")) {
@@ -187,9 +188,37 @@ public final class SchemaDiffFixture {
     }
 
     private static Connection h2(String name) throws Exception {
-        // No DB_CLOSE_DELAY: the in-memory db is dropped when its single connection closes,
-        // so each fixture run is fully isolated.
         return DriverManager.getConnection(
                 "jdbc:h2:mem:" + name + ";MODE=MySQL", "sa", "");
+    }
+
+    /** H2 connection that survives after close (shared in-memory database). */
+    public static Connection persistentH2(String name) throws Exception {
+        return DriverManager.getConnection(
+                "jdbc:h2:mem:" + name + ";MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");
+    }
+
+    public static String dumpDiffSummary(SchemaDiffResult diff) {
+        StringBuilder sb = new StringBuilder();
+        if (diff.getRoots() != null) {
+            for (com.diffdb.diff.DiffNode root : diff.getRoots()) {
+                dumpNode(sb, root, 0);
+            }
+        }
+        return sb.toString();
+    }
+
+    private static void dumpNode(StringBuilder sb, com.diffdb.diff.DiffNode node, int depth) {
+        String prefix = "  ".repeat(depth);
+        if (node.getCategory() == com.diffdb.diff.DiffCategory.CONTAINER) {
+            sb.append(prefix).append("[").append(node.getObjectType()).append("]\n");
+            for (com.diffdb.diff.DiffNode child : node.getChildren()) {
+                dumpNode(sb, child, depth + 1);
+            }
+        } else {
+            sb.append(prefix).append(node.getCategory()).append(" ")
+                    .append(node.getObjectType()).append(" ").append(node.getName())
+                    .append(" detail=").append(node.getDetail()).append("\n");
+        }
     }
 }

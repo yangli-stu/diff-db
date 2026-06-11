@@ -25,7 +25,7 @@ public class ShowTablesDialog extends DialogWrapper {
         this.connectionName = connectionName;
         this.tables = tables;
         setTitle("Tables: " + connectionName);
-        setModal(false);
+        setModal(true);
         init();
     }
 

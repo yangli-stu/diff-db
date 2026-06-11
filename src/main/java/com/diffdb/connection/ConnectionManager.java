@@ -32,7 +32,7 @@ public final class ConnectionManager {
                 effectivePort = tunnel.getLocalPort();
             }
 
-            String url = JdbcUrlBuilder.build(
+            String url = JdbcUrlBuilder.buildWithParams(
                     config.getDatabaseType(), effectiveHost, effectivePort, config.getDatabase());
 
             java.sql.Connection conn = DriverProvider.connect(
@@ -42,7 +42,7 @@ public final class ConnectionManager {
                     config.getUser(),
                     dbPassword);
 
-            return new ManagedConnection(conn, tunnel);
+            return new ManagedConnection(conn, tunnel, config);
         } catch (Exception e) {
             if (tunnel != null) {
                 tunnel.close();

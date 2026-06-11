@@ -14,8 +14,10 @@ public interface SchemaDiffService {
      * @param source   the reference connection (the desired state)
      * @param target   the connection to be brought in line with the source
      * @param secrets  resolves passwords/passphrases per connection id
+     * @param listener optional progress callback; may be null
      */
-    SchemaDiffResult diff(ConnectionConfig source, ConnectionConfig target, SecretResolver secrets)
+    SchemaDiffResult diff(ConnectionConfig source, ConnectionConfig target, SecretResolver secrets,
+                          ProgressListener listener)
             throws Exception;
 
     /**
@@ -28,5 +30,11 @@ public interface SchemaDiffService {
 
         /** SSH password or key passphrase for the given connection, or null. */
         String sshSecret(ConnectionConfig config);
+    }
+
+    /** Receives fine-grained progress updates during diff. */
+    interface ProgressListener {
+        /** Called when a new step begins. */
+        void onStep(String step);
     }
 }

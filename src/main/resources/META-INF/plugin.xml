@@ -7,13 +7,19 @@
     <description><![CDATA[
         <p><b>DiffDB</b> compares the schema of two databases (MySQL / PostgreSQL),
         directly or over an SSH tunnel, visualizes the differences as a colour-coded
-        tree, and generates dialect-aware migration SQL to bring the target in line
+        table, and generates dialect-aware migration SQL to bring the target in line
         with the source.</p>
+        <p><b>Read-only & safe:</b> the plugin only reads database metadata
+        (<code>information_schema</code> / <code>pg_catalog</code>). It never executes
+        DDL, DML, or any write operation against your database. Generated SQL is for
+        preview and manual execution only.</p>
         <ul>
             <li>Works in both <b>Community</b> and Ultimate editions</li>
             <li>No JPA / Flyway / Liquibase project setup required</li>
             <li>Compare any two JDBC databases; export migration SQL</li>
             <li>SSH tunnel support for remote databases</li>
+            <li>Connection management with import/export via YAML</li>
+            <li>Passwords stored in IntelliJ PasswordSafe (never plain text)</li>
         </ul>
     ]]></description>
 
@@ -30,7 +36,7 @@
                     anchor="right"
                     factoryClass="com.diffdb.ui.DiffDbToolWindowFactory"/>
 
-        <postStartupActivity implementation="com.diffdb.ui.DiffDbStartupActivity"/>
+        <!-- Tool window is opened manually via Tools menu or IDE action -->
     </extensions>
 
     <actions>

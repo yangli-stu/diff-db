@@ -32,6 +32,7 @@ CREATE TABLE `activity_reward_log` (
   `details` json DEFAULT NULL,
   `rewards` json DEFAULT NULL,
   `user_account_id` varchar(255) NOT NULL,
+  `status` tinyint NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `IDXk19mxlcyma049xacphrhyddou` (`activity_key`),
   KEY `IDXiu3kjjwl7ysjweu6uj76k016g` (`user_account_id`)

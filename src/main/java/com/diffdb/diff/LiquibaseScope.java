@@ -22,20 +22,23 @@ import java.util.Map;
  */
 public final class LiquibaseScope {
 
+    private static final ClassLoader PLUGIN_CLASS_LOADER = LiquibaseScope.class.getClassLoader();
+    private static final StandardServiceLocator SERVICE_LOCATOR = new StandardServiceLocator();
+    private static final ClassLoaderResourceAccessor RESOURCE_ACCESSOR = new ClassLoaderResourceAccessor(PLUGIN_CLASS_LOADER);
+
     private LiquibaseScope() {
     }
 
     public static <T> T run(ScopedCall<T> call) throws Exception {
-        ClassLoader pluginClassLoader = LiquibaseScope.class.getClassLoader();
         Thread currentThread = Thread.currentThread();
         ClassLoader originalClassLoader = currentThread.getContextClassLoader();
-        currentThread.setContextClassLoader(pluginClassLoader);
+        currentThread.setContextClassLoader(PLUGIN_CLASS_LOADER);
         try {
             Map<String, Object> scopeValues = new HashMap<>();
             scopeValues.put(Scope.Attr.logService.name(), new JavaLogService());
-            scopeValues.put(Scope.Attr.resourceAccessor.name(), new ClassLoaderResourceAccessor());
-            scopeValues.put(Scope.Attr.serviceLocator.name(), new StandardServiceLocator());
-            scopeValues.put(Scope.Attr.classLoader.name(), pluginClassLoader);
+            scopeValues.put(Scope.Attr.resourceAccessor.name(), RESOURCE_ACCESSOR);
+            scopeValues.put(Scope.Attr.serviceLocator.name(), SERVICE_LOCATOR);
+            scopeValues.put(Scope.Attr.classLoader.name(), PLUGIN_CLASS_LOADER);
             return Scope.child(scopeValues, call::call);
         } finally {
             currentThread.setContextClassLoader(originalClassLoader);

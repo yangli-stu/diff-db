@@ -88,6 +88,20 @@ public class ConnectionConfig {
         this.schema = schema;
     }
 
+    /**
+     * Returns the schema/database name to use in SQL qualification.
+     * Priority: {@code schema} if non-blank, otherwise {@code database}.
+     */
+    public String getEffectiveSchema() {
+        if (schema != null && !schema.isBlank()) {
+            return schema;
+        }
+        if (database != null && !database.isBlank()) {
+            return database;
+        }
+        return null;
+    }
+
     public String getUser() {
         return user;
     }
