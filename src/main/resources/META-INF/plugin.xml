@@ -1,8 +1,8 @@
 <idea-plugin>
     <id>com.diffdb.schema-compare</id>
     <name>DiffDB</name>
-    <version>0.1.0</version>
-    <vendor email="you@example.com" url="https://github.com/your-name/diff-db">Your Name</vendor>
+    <version>1.0.1</version>
+    <vendor email="1545649070@qq.com" url="https://github.com/yangli-stu/diff-db">Bowen</vendor>
 
     <description><![CDATA[
         <p><b>DiffDB</b> compares the schema of two databases (MySQL / PostgreSQL),
@@ -24,8 +24,20 @@
     ]]></description>
 
     <change-notes><![CDATA[
-        <ul><li>0.1.0 — Initial release: MySQL/PostgreSQL schema diff + migration SQL + SSH tunnel.</li></ul>
-    ]]></change-notes>
+        <ul>
+            <li><b>1.0.1 — SSH Performance &amp; Accuracy</b>
+                <ul>
+                    <li>Optimized SSH tunnel speed with bulk queries and larger buffers</li>
+                    <li>Fixed MySQL information_schema caching causing phantom diffs</li>
+                    <li>Accurate nullable, default, and column size detection</li>
+                    <li>Backtick-quoted identifiers, DROP TABLE IF EXISTS</li>
+                    <li>Detail tooltip + Source→Target direction label in diff table</li>
+                </ul>
+            </li>
+            <li>1.0.0 — Initial release</li>
+        </ul>
+    ]]>
+    </change-notes>
 
     <depends>com.intellij.modules.platform</depends>
 
