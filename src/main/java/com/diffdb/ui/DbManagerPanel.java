@@ -143,7 +143,7 @@ public class DbManagerPanel extends JPanel {
 
         menu.addSeparator();
 
-        JMenuItem deleteItem = new JMenuItem("Delete");
+        JMenuItem deleteItem = new JMenuItem("Remove");
         deleteItem.addActionListener(ev -> deleteConnection(config));
         menu.add(deleteItem);
 
