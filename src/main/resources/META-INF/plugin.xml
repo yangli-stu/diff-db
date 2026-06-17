@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.diffdb.schema-compare</id>
     <name>DiffDB</name>
-    <version>1.0.1</version>
+    <version>1.0.2</version>
     <vendor email="1545649070@qq.com" url="https://github.com/yangli-stu/diff-db">Bowen</vendor>
 
     <description><![CDATA[
@@ -25,6 +25,7 @@
 
     <change-notes><![CDATA[
         <ul>
+            <li>1.0.2 — Update icon.</li>
             <li><b>1.0.1 — SSH Performance &amp; Accuracy</b>
                 <ul>
                     <li>Optimized SSH tunnel speed with bulk queries and larger buffers</li>
@@ -34,7 +35,7 @@
                     <li>Detail tooltip + Source→Target direction label in diff table</li>
                 </ul>
             </li>
-            <li>1.0.0 — Initial release</li>
+            <li>1.0.0 — Initial release: MySQL/PostgreSQL schema diff + migration SQL + SSH tunnel.</li>
         </ul>
     ]]>
     </change-notes>
